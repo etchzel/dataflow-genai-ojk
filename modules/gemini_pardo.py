@@ -12,7 +12,8 @@ class GeminiProHandler(DoFn):
   """
   Handler for Gemini API.
   """
-  def __init__(self):
+  def __init__(self, throttle_delay_secs):
+    self.throttle_delay_secs = throttle_delay_secs
     self.throttled_secs = Metrics.counter(GeminiProHandler, "cumulativeThrottlingSeconds")
     self.throttler = AdaptiveThrottler(window_ms=1, bucket_ms=1, overload_ratio=2)
 
@@ -33,7 +34,12 @@ class GeminiProHandler(DoFn):
     import time
     import logging
     from google.api_core.exceptions import TooManyRequests
-    from vertexai.preview.generative_models import FunctionDeclaration, Tool
+    from vertexai.preview.generative_models import (
+      FunctionDeclaration, 
+      Tool, 
+      HarmCategory,
+      HarmBlockThreshold
+    )
 
     parser_func = FunctionDeclaration(
       name="get_score_sentiment",
@@ -48,6 +54,13 @@ class GeminiProHandler(DoFn):
     )
 
     parser = Tool(function_declarations=[parser_func])
+    safety_config = {
+      HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+      HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+      HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+      HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+      HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.BLOCK_NONE
+    }
 
     while self.throttler.throttle_request(time.time() * 1000):
       logging.info(
@@ -66,8 +79,11 @@ class GeminiProHandler(DoFn):
 
       response_sentiment = self.model.generate_content(
         scoring,
-        generation_config={"temperature": 0.2}
+        generation_config={"temperature": 0.2},
+        safety_settings=safety_config
       )
+
+      self.throttler.successful_request(req_time * 1000)
 
       parsing_result = f"""
       Ektraks sentiment dan score dari text berikut
@@ -77,7 +93,8 @@ class GeminiProHandler(DoFn):
       response_parsing = self.model.generate_content(
         parsing_result,
         generation_config={"temperature": 0.2},
-        tools=[parser]
+        tools=[parser],
+        safety_settings=safety_config
       )
 
       sentiment = response_parsing.candidates[0].content.parts[0].function_call.args.get("sentiment", 'inference_error')
@@ -107,5 +124,5 @@ class GeminiProHandler(DoFn):
     """
     Run inference
     """
-    prediction = self.get_request(data=element, throttle_delay_secs=5)
+    prediction = self.get_request(data=element, throttle_delay_secs=self.throttle_delay_secs)
     yield prediction

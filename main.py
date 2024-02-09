@@ -6,7 +6,7 @@ import apache_beam as beam
 from modules.gemini_pardo import GeminiProHandler
 from apache_beam.io.filesystem import CompressionTypes
 from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.ml.inference.base import RunInference
+# from apache_beam.ml.inference.base import RunInference
 from apache_beam.io.gcp.bigquery import BigQuerySource
 
 class JSONLWriter(beam.PTransform):
@@ -43,7 +43,7 @@ def main(known_args, pipeline_args):
   runner = known_args.runner
   pipeline_options = PipelineOptions(pipeline_args, streaming=False, runner=runner)
 
-  query = """
+  query_fb = """
   SELECT DISTINCT 
     post_id, 
     text, 
@@ -58,6 +58,65 @@ def main(known_args, pipeline_args):
     AND DATE(TIMESTAMP_SECONDS(post_timestamp)) BETWEEN periods.from AND periods.to
   WHERE text is not null
   """
+
+  query_twitter = """
+  SELECT DISTINCT 
+    post_id, 
+    text, 
+    posts.entity, 
+    keyword, 
+    search_term, 
+    author.id as author_id 
+  FROM `datalabs-int-bigdata.ojk_poc_new.twitter_posts` posts
+  LEFT JOIN `datalabs-int-bigdata.ojk_poc_new.periode` periods 
+  ON 1=1
+    AND posts.entity = periods.entity
+    AND DATE(TIMESTAMP_SECONDS(post_timestamp)) BETWEEN periods.from AND periods.to
+  WHERE text is not null
+  """
+
+  query_tiktok = """
+  SELECT DISTINCT 
+    post_id, 
+    text, 
+    posts.entity, 
+    keyword, 
+    search_term,
+    author.id as author_id 
+  FROM `datalabs-int-bigdata.ojk_poc_new.tiktok_posts` posts
+  LEFT JOIN `datalabs-int-bigdata.ojk_poc_new.periode` periods 
+  ON 1=1
+    AND posts.entity = periods.entity
+    AND DATE(TIMESTAMP_SECONDS(post_timestamp)) BETWEEN periods.from AND periods.to
+  WHERE text is not null AND REGEXP_CONTAINS(text, CONCAT("(?i:", posts.entity, ")"))
+  """
+
+  query_insta = """
+  SELECT DISTINCT 
+    post_id, 
+    text, 
+    posts.entity, 
+    keyword, 
+    search_term, 
+    author.id as author_id 
+  FROM `datalabs-int-bigdata.ojk_poc_new.instagram_posts` posts
+  LEFT JOIN `datalabs-int-bigdata.ojk_poc_new.periode` periods 
+  ON 1=1
+    AND posts.entity = periods.entity
+    AND DATE(TIMESTAMP_SECONDS(post_timestamp)) BETWEEN periods.from AND periods.to
+  WHERE text is not null
+  """
+
+  if known_args.query_socmed == "facebook":
+    query = query_fb
+  elif known_args.query_socmed == "twitter":
+    query = query_twitter
+  elif known_args.query_socmed == "tiktok":
+    query = query_tiktok
+  elif known_args.query_socmed == "instagram":
+    query = query_insta
+  else:
+    query = query_twitter
 
   with beam.Pipeline(options=pipeline_options) as pipeline:
     # predict = (
@@ -79,8 +138,8 @@ def main(known_args, pipeline_args):
           query=query, 
           use_standard_sql=True
       )
-      | "Inference" >> beam.ParDo(GeminiProHandler())
-      | "Write to GCS" >> JSONLWriter("gs://ojk-poc-scraping-564223160817/dataflow/facebook/inference", file_name_suffix=".json")
+      | "Inference" >> beam.ParDo(GeminiProHandler(throttle_delay_secs=int(known_args.throttle_delay)))
+      | "Write to GCS" >> JSONLWriter(f"gs://ojk-poc-scraping-564223160817/dataflow/{known_args.query_socmed}/inference", file_name_suffix=".json")
     )
 
 if __name__ == "__main__":
@@ -93,6 +152,12 @@ if __name__ == "__main__":
 
   # Use arguments
   parser = argparse.ArgumentParser()
+  parser.add_argument(
+    "--query_socmed", default="twitter"
+  )
+  parser.add_argument(
+    "--throttle_delay", default=5
+  )
   parser.add_argument(
     "--runner", default="DataflowRunner"
   )
@@ -142,6 +207,9 @@ if __name__ == "__main__":
     )
     pipeline_args.extend(
       ["--machine_type=n2-standard-2"]
+    )
+    pipeline_args.extend(
+      ["--max_num_workers=3"]
     )
   print(known_args, pipeline_args)
   main(known_args, pipeline_args)
