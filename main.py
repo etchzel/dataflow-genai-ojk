@@ -2,7 +2,8 @@ import argparse
 import logging
 import sys
 import apache_beam as beam
-from modules.gemini_handler import GeminiProHandler
+# from modules.gemini_handler import GeminiProHandler
+from modules.gemini_pardo import GeminiProHandler
 from apache_beam.io.filesystem import CompressionTypes
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.ml.inference.base import RunInference
@@ -59,6 +60,18 @@ def main(known_args, pipeline_args):
   """
 
   with beam.Pipeline(options=pipeline_options) as pipeline:
+    # predict = (
+    #   pipeline
+    #   | "Read Data" >> BigQuerySource(
+    #       project="datalabs-int-bigdata", 
+    #       query=query, 
+    #       use_standard_sql=True
+    #   )
+    #   | "Inference" >> RunInference(model_handler=GeminiProHandler(min_batch_size=50, max_batch_size=1000))
+    #   | "Flatten Batch" >> beam.FlatMap(lambda elements: elements)
+    #   | "Write to GCS" >> JSONLWriter("gs://ojk-poc-scraping-564223160817/dataflow/facebook/inference", file_name_suffix=".json")
+    # )
+
     predict = (
       pipeline
       | "Read Data" >> BigQuerySource(
@@ -66,8 +79,7 @@ def main(known_args, pipeline_args):
           query=query, 
           use_standard_sql=True
       )
-      | "Inference" >> RunInference(model_handler=GeminiProHandler(min_batch_size=50, max_batch_size=1000))
-      | "Flatten Batch" >> beam.FlatMap(lambda elements: elements)
+      | "Inference" >> beam.ParDo(GeminiProHandler())
       | "Write to GCS" >> JSONLWriter("gs://ojk-poc-scraping-564223160817/dataflow/facebook/inference", file_name_suffix=".json")
     )
 

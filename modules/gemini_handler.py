@@ -1,7 +1,5 @@
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
-from vertexai.preview.generative_models import GenerativeModel
-
 from google.api_core.exceptions import ServerError
 from google.api_core.exceptions import TooManyRequests
 
@@ -48,7 +46,7 @@ class GeminiProHandler(ModelHandler):
   def get_request(
       self,
       batch: Sequence[Any],
-      model: GenerativeModel,
+      model: Any,
       throttle_delay_secs: int,
       inference_args: Optional[Dict[str, Any]]):
     import time
@@ -131,7 +129,7 @@ class GeminiProHandler(ModelHandler):
   def run_inference(
     self, 
     batch: Sequence[Any], 
-    model: GenerativeModel, 
+    model: Any, 
     inference_args: Optional[Dict[str, Any]] = None
   ) -> Iterable[Any]:
     """
