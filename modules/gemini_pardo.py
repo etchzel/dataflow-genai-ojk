@@ -85,20 +85,22 @@ class GeminiProHandler(DoFn):
 
       self.throttler.successful_request(req_time * 1000)
 
-      parsing_result = f"""
-      Ektraks sentiment dan score dari text berikut
-      {response_sentiment.text}
-      """
-
-      response_parsing = self.model.generate_content(
-        parsing_result,
-        generation_config={"temperature": 0.2},
-        tools=[parser],
-        safety_settings=safety_config
-      )
-
-      sentiment = response_parsing.candidates[0].content.parts[0].function_call.args.get("sentiment", 'inference_error')
-      score = response_parsing.candidates[0].content.parts[0].function_call.args.get("score", '')
+      try:
+        parsing_result = f"""
+        Ektraks sentiment dan score dari text berikut
+        {response_sentiment.text}
+        """
+        response_parsing = self.model.generate_content(
+          parsing_result,
+          generation_config={"temperature": 0.2},
+          tools=[parser],
+          safety_settings=safety_config
+        )
+        sentiment = response_parsing.candidates[0].content.parts[0].function_call.args.get("sentiment", 'inference_error')
+        score = response_parsing.candidates[0].content.parts[0].function_call.args.get("score", '')
+      except:
+        sentiment = "inference_error"
+        score = ""
 
       output = {
         "post_id": data.get("post_id"),

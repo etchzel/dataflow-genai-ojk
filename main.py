@@ -209,7 +209,7 @@ if __name__ == "__main__":
       ["--machine_type=n2-standard-2"]
     )
     pipeline_args.extend(
-      ["--max_num_workers=3"]
+      ["--max_num_workers=1"]
     )
   print(known_args, pipeline_args)
   main(known_args, pipeline_args)
