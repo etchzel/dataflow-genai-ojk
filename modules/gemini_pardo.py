@@ -72,30 +72,31 @@ class GeminiProHandler(DoFn):
     try:
       req_time = time.time()
       scoring = f"""
-      Klasifikasikan sentiment text berikut terhadap entitas "{data.get('entity')}" menjadi positif, negatif, atau netral dan berikan probabilitas score nya.
+      Klasifikasikan sentiment text berikut menjadi positif, negatif, atau netral dan berikan probabilitas score nya.
       Jika netral maka berikan probabilitas score -0.2 hingga 0.2
       {data.get('text')}
       """
 
-      response_sentiment = self.model.generate_content(
-        scoring,
-        generation_config={"temperature": 0.2},
-        safety_settings=safety_config
-      )
-
-      self.throttler.successful_request(req_time * 1000)
-
       try:
+        response_sentiment = self.model.generate_content(
+          scoring,
+          generation_config={"temperature": 0.2},
+          safety_settings=safety_config
+        )
+        self.throttler.successful_request(req_time * 1000)
+
         parsing_result = f"""
         Ektraks sentiment dan score dari text berikut
         {response_sentiment.text}
         """
+
         response_parsing = self.model.generate_content(
           parsing_result,
           generation_config={"temperature": 0.2},
           tools=[parser],
           safety_settings=safety_config
         )
+        
         sentiment = response_parsing.candidates[0].content.parts[0].function_call.args.get("sentiment", 'inference_error')
         score = response_parsing.candidates[0].content.parts[0].function_call.args.get("score", '')
       except:

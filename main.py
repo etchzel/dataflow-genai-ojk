@@ -139,7 +139,7 @@ def main(known_args, pipeline_args):
           use_standard_sql=True
       )
       | "Inference" >> beam.ParDo(GeminiProHandler(throttle_delay_secs=int(known_args.throttle_delay)))
-      | "Write to GCS" >> JSONLWriter(f"gs://ojk-poc-scraping-564223160817/dataflow/{known_args.query_socmed}/inference", file_name_suffix=".json")
+      | "Write to GCS" >> JSONLWriter(f"gs://ojk-poc-scraping-564223160817/dataflow/{known_args.query_socmed}/alt/inference", file_name_suffix=".json")
     )
 
 if __name__ == "__main__":
